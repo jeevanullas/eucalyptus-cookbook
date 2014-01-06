@@ -75,11 +75,6 @@ else
   end
 end
 
-service "messagebus" do
-  supports :status => true, :restart => true, :reload => true
-  action [ :enable, :start ]
-end
-
 ## Setup bridge to allow instances to dhcp properly and early on
 execute "brctl setfd #{node["eucalyptus"]["network"]["bridge-interface"]} 2"
 execute "brctl sethello #{node["eucalyptus"]["network"]["bridge-interface"]} 2"
