@@ -17,13 +17,12 @@
 ##
 
 ## Create home directory
-if node["eucalyptus"]["home-directory"] != "/"
-  directory node["eucalyptus"]["home-directory"] do
-    owner "eucalyptus"
-    group "eucalyptus"
-    mode 00750
-    action :create
-  end
+directory node["eucalyptus"]["home-directory"] do
+  owner "eucalyptus"
+  group "eucalyptus"
+  mode 00750
+  action :create
+  only_if { node["eucalyptus"]["home-directory"] != "/" }
 end
 
 ## Init script
@@ -37,10 +36,9 @@ if node['eucalyptus']['init-script-url'] != ""
   end
 end
 
-if node['eucalyptus']['admin-ssh-pub-key'] != ""
-  execute "Add the admins ssh key to authorized keys" do
-    command "echo #{node['eucalyptus']['admin-ssh-pub-key']} >> /root/.ssh/authorized_keys"
-  end
+execute "Add the admins ssh key to authorized keys" do
+  command "echo #{node['eucalyptus']['admin-ssh-pub-key']} >> /root/.ssh/authorized_keys"
+  only_if { node['eucalyptus']['admin-ssh-pub-key'] != "" }
 end
 
 execute "Flush and save iptables" do
@@ -50,7 +48,7 @@ end
 ## Setup NTP
 include_recipe "ntp"
 execute "ntpdate -u #{node["eucalyptus"]["ntp-server"]}" do
-  cwd '/tmp'
+  cwd Chef::Config[:file_cache_path]
 end
 
 ## Disable SELinux
@@ -71,23 +69,23 @@ yum_repository "euca2ools-release" do
   gpgkey "http://www.eucalyptus.com/sites/all/files/c1240596-eucalyptus-release-key.pub"
 end
 
-remote_file "/tmp/epel-release.rpm" do
+remote_file "#{Chef::Config[:file_cache_path]}/epel-release.rpm" do
   source node["eucalyptus"]["epel-rpm"]
   not_if "rpm -qa | grep 'epel-release'"
 end
 
-remote_file "/tmp/elrepo-release.rpm" do
+remote_file "#{Chef::Config[:file_cache_path]}/elrepo-release.rpm" do
   source node["eucalyptus"]["elrepo-rpm"]
   not_if "rpm -qa | grep 'elrepo-release'"
 end
 
 execute 'yum install -y *epel*.rpm' do
-  cwd '/tmp'
+  cwd Chef::Config[:file_cache_path]
   not_if "ls /etc/yum.repos.d/epel*"
 end
 
 execute 'yum install -y *elrepo*.rpm' do
-  cwd '/tmp'
+  cwd Chef::Config[:file_cache_path]
   not_if "ls /etc/yum.repos.d/elrepo*"
 end
 
@@ -137,8 +135,9 @@ if node["eucalyptus"]["install-type"] == "source"
   end
   
   ### Get WSDL2C
-  execute 'wget https://raw.github.com/eucalyptus/eucalyptus-rpmspec/master/euca-WSDL2C.sh && chmod +x euca-WSDL2C.sh' do
-    cwd node["eucalyptus"]["home-directory"]
+  remote_file "#{node["eucalyptus"]["home-directory"]}/euca-WSDL2C.sh" do
+    source "https://raw.github.com/eucalyptus/eucalyptus-rpmspec/master/euca-WSDL2C.sh"
+    mode 0777
   end
 
   ### Checkout Eucalyptus Source
@@ -147,7 +146,7 @@ if node["eucalyptus"]["install-type"] == "source"
   end
 
   execute "Init submodules" do
-    cwd "#{node["eucalyptus"]["source-directory"]}"
+    cwd node["eucalyptus"]["source-directory"]
     command "git submodule init && git submodule update"
   end
 
@@ -169,13 +168,13 @@ if node["eucalyptus"]["install-type"] == "source"
   ### Run configure for open source
   execute "Run configure with open source bits"  do
     command configure_command
-    cwd "#{node["eucalyptus"]["source-directory"]}"
+    cwd node["eucalyptus"]["source-directory"]
     not_if "ls #{node["eucalyptus"]["source-directory"]}/vmware-broker"
   end
   ### Run configure with enterprise bits
   execute "Run configure with enterprise bits" do
     command configure_command + " --with-vddk=/opt/packages/vddk"
-    cwd "#{node["eucalyptus"]["source-directory"]}"
+    cwd node["eucalyptus"]["source-directory"]
     only_if "ls #{node["eucalyptus"]["source-directory"]}/vmware-broker"
   end
 end

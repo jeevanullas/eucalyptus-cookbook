@@ -57,11 +57,10 @@ execute 'remove euca packages' do
 end
 
 ## Delete home directory
-if node['eucalyptus']['home-directory'] != '/'
-  directory node['eucalyptus']['home-directory'] do
-    recursive true
-    action :delete
-  end
+directory node['eucalyptus']['home-directory'] do
+  recursive true
+  action :delete
+  only_if node['eucalyptus']['home-directory'] != '/'
 end
 
 ## Remove repo rpms

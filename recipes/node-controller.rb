@@ -39,13 +39,8 @@ template "/etc/sysconfig/network-scripts/ifcfg-" + node["eucalyptus"]["network"]
   owner "root"
   group "root"
   not_if "ls /etc/sysconfig/network-scripts/ifcfg-" + node["eucalyptus"]["network"]["bridge-interface"]
-  notifies :run, "execute[network-restart]", :immediately
+  notifies :restart, "service[network]", :immediately
 end
-
-execute "network-restart" do
-  command "service network restart"
-  action :nothing
-end 
 
 ## Install packages for the NC
 if node["eucalyptus"]["install-type"] == "packages"
@@ -54,11 +49,10 @@ if node["eucalyptus"]["install-type"] == "packages"
     options node['eucalyptus']['yum-options']
     flush_cache [:before]
   end
-  if node["eucalyptus"]["network"]["mode"] == "EDGE"
-    yum_package "eucanetd" do
-      action :upgrade
-      options node['eucalyptus']['yum-options']
-    end
+  yum_package "eucanetd" do
+    action :upgrade
+    options node['eucalyptus']['yum-options']
+    only_if { node["eucalyptus"]["network"]["mode"] == "EDGE" }
   end
 else
   ## Install CC from source from internal repo if it exists
@@ -70,7 +64,7 @@ else
   end
   ## Install CLC from open source repo if it exists
   execute "export JAVA_HOME='/usr/lib/jvm/java-1.7.0-openjdk.x86_64' && export JAVA='$JAVA_HOME/jre/bin/java' && export EUCALYPTUS='#{node["eucalyptus"]["home-directory"]}' && make && make install" do
-    cwd "#{node["eucalyptus"]["source-directory"]}"
+    cwd node["eucalyptus"]["source-directory"]
     only_if "ls #{node["eucalyptus"]["source-directory"]}"
     creates "#{node["eucalyptus"]["source-directory"]}/eucalyptus/node/generated"
     timeout node["eucalyptus"]["compile-timeout"]
@@ -140,7 +134,7 @@ ruby_block "Get node keys from CC" do
       FileUtils.chown 'eucalyptus', 'eucalyptus', file_name
     end
   end
-  not_if "#{Chef::Config[:solo]}"
+  not_if Chef::Config[:solo]
 end
 
 service "eucalyptus-nc" do
@@ -148,9 +142,8 @@ service "eucalyptus-nc" do
   supports :status => true, :start => true, :stop => true, :restart => true
 end
 
-if node["eucalyptus"]["network"]["mode"] == "EDGE"
-  service "eucanetd" do
-    action [ :enable, :start ]
-    supports :status => true, :start => true, :stop => true, :restart => true
-  end
+service "eucanetd" do
+  action [ :enable, :start ]
+  supports :status => true, :start => true, :stop => true, :restart => true
+  only_if { node["eucalyptus"]["network"]["mode"] == "EDGE" }
 end

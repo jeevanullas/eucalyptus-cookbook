@@ -53,10 +53,6 @@ else
   execute "chmod +x #{tools_dir}/eucalyptus-cc"
 end
 
-execute "Stop any running cc process" do
-        command "service eucalyptus-cc stop || true"
-end
-
 node["eucalyptus"]["topology"]["clusters"].each do |name, info|
   log "Found Cluster" do
     message "Found cluster #{name} with attributes: #{info}"
@@ -78,7 +74,7 @@ execute "export EUCALYPTUS='#{node["eucalyptus"]["home-directory"]}' && #{node["
 ruby_block "Get cluster keys from CLC" do
   block do
     local_cluster_name = node["eucalyptus"]["local-cluster-name"]
-    if node["eucalyptus"]["topology"]["clc-1"] != ""
+    if not Chef::Config[:solo]
       ### CLC is seperate
       clc_ip = node["eucalyptus"]["topology"]["clc-1"]
       clc  = search(:node, "ipaddress:#{clc_ip}").first
@@ -100,7 +96,6 @@ ruby_block "Get cluster keys from CLC" do
      FileUtils.chown 'eucalyptus', 'eucalyptus', file_name
     end
   end
-  not_if "#{Chef::Config[:solo]}"
 end
 
 service "eucalyptus-cc" do

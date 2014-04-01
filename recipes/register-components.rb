@@ -42,7 +42,7 @@ clusters.each do |cluster, info|
 	cc_ip = info["cc-1"]
   end
   
-  execute "Register CC" do
+  execute "Register CC #{cluster}" do
     command "#{euca_conf} --register-cluster -P #{cluster} -H #{cc_ip} -C #{cluster}-cc-1 #{dont_sync_keys}"
     not_if "euca-describe-services | grep #{cluster}-cc-1"
   end
@@ -52,7 +52,7 @@ clusters.each do |cluster, info|
 	sc_ip = info["sc-1"]
   end
   
-  execute "Register SC" do
+  execute "Register SC #{cluster}" do
     command "#{euca_conf} --register-sc -P #{cluster} -H #{sc_ip} -C #{cluster}-sc-1 #{dont_sync_keys}"
     not_if "euca-describe-services | grep #{cluster}-sc-1"
   end
@@ -66,11 +66,11 @@ clusters.each do |cluster, info|
         node.save
       end
     end
-    not_if "#{Chef::Config[:solo]}"
+    not_if Chef::Config[:solo]
   end
   execute "Copy keys locally" do
     command "cp #{cluster_keys_dir}/* #{node["eucalyptus"]["home-directory"]}/var/lib/eucalyptus/keys/"
-    only_if "#{Chef::Config[:solo]}"
+    only_if Chef::Config[:solo]
   end
 end
 
@@ -138,12 +138,11 @@ end
 
 ### Register ELB Image
 if node['eucalyptus']['install-load-balancer']
-  if node['eucalyptus']['load-balancer-repo'] != ""
-    yum_repository "eucalyptus-load-balancer" do
-      description "Eucalyptus LoadBalancer Repo"
-      url node["eucalyptus"]["load-balancer-repo"]
-      gpgcheck false
-    end
+  yum_repository "eucalyptus-load-balancer" do
+    description "Eucalyptus LoadBalancer Repo"
+    url node["eucalyptus"]["load-balancer-repo"]
+    gpgcheck false
+    only_if { node['eucalyptus']['load-balancer-repo'] != "" }
   end
   yum_package "eucalyptus-load-balancer-image" do
     action :upgrade
@@ -156,12 +155,11 @@ end
 
 ### Register Imaging Service Image
 if node['eucalyptus']['install-imaging-worker']
-  if node['eucalyptus']['imaging-worker-repo'] != ""
-    yum_repository "eucalyptus-imaging-worker" do
-      description "Eucalyptus Imaging Repo"
-      url node["eucalyptus"]["imaging-worker-repo"]
-      gpgcheck false
-    end
+  yum_repository "eucalyptus-imaging-worker" do
+    description "Eucalyptus Imaging Repo"
+    url node["eucalyptus"]["imaging-worker-repo"]
+    gpgcheck false
+    only_if { node['eucalyptus']['imaging-worker-repo'] != "" }
   end
   yum_package "eucalyptus-imaging-worker-image" do
     action :upgrade
