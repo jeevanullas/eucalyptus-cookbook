@@ -74,15 +74,9 @@ execute "export EUCALYPTUS='#{node["eucalyptus"]["home-directory"]}' && #{node["
 ruby_block "Get cluster keys from CLC" do
   block do
     local_cluster_name = node["eucalyptus"]["local-cluster-name"]
-    if not Chef::Config[:solo]
-      ### CLC is seperate
-      clc_ip = node["eucalyptus"]["topology"]["clc-1"]
-      clc  = search(:node, "ipaddress:#{clc_ip}").first
-      node.set["eucalyptus"]["cloud-keys"][local_cluster_name] = clc["eucalyptus"]["cloud-keys"][local_cluster_name]
-    else
-      node.set["eucalyptus"]["topology"]["clusters"][local_cluster_name]["cc-1"] = node["ipaddress"]
-      node.set["eucalyptus"]["cloud-keys"][local_cluster_name] = node["eucalyptus"]["cloud-keys"][local_cluster_name]
-    end
+    clc_ip = node["eucalyptus"]["topology"]["clc-1"]
+    clc  = search(:node, "ipaddress:#{clc_ip}").first
+    node.set["eucalyptus"]["cloud-keys"][local_cluster_name] = clc["eucalyptus"]["cloud-keys"][local_cluster_name]
     node.save
     node["eucalyptus"]["cloud-keys"][local_cluster_name].each do |key_name,data|
      file_name = "#{node["eucalyptus"]["home-directory"]}/var/lib/eucalyptus/keys/#{key_name}"
@@ -96,6 +90,7 @@ ruby_block "Get cluster keys from CLC" do
      FileUtils.chown 'eucalyptus', 'eucalyptus', file_name
     end
   end
+  not_if { Chef::Config[:solo] }
 end
 
 service "eucalyptus-cc" do
