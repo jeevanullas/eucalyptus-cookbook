@@ -42,6 +42,10 @@ template "/etc/sysconfig/network-scripts/ifcfg-" + node["eucalyptus"]["network"]
   notifies :restart, "service[network]", :immediately
 end
 
+service "network" do
+  action :nothing
+end
+
 ## Install packages for the NC
 if node["eucalyptus"]["install-type"] == "packages"
   yum_package "eucalyptus-nc" do
