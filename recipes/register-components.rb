@@ -66,11 +66,11 @@ clusters.each do |cluster, info|
         node.save
       end
     end
-    not_if Chef::Config[:solo]
+    not_if { Chef::Config[:solo] }
   end
   execute "Copy keys locally" do
     command "cp #{cluster_keys_dir}/* #{node["eucalyptus"]["home-directory"]}/var/lib/eucalyptus/keys/"
-    only_if Chef::Config[:solo]
+    only_if { Chef::Config[:solo] }
   end
 end
 

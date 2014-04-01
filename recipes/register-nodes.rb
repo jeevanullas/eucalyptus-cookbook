@@ -30,7 +30,7 @@ ruby_block "Save node list" do
     node.set["eucalyptus"]["topology"]["clusters"][node["eucalyptus"]["local-cluster-name"]]["nodes"] = nodes
     node.save
   end
-  not_if Chef::Config[:solo]
+  not_if { Chef::Config[:solo] }
 end
 
 nodes.split().each do |nc_ip|
