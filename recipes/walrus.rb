@@ -64,25 +64,24 @@ execute "export EUCALYPTUS='#{node["eucalyptus"]["home-directory"]}' && #{node["
 
 ruby_block "Get keys from CLC" do
   block do
-    if not Chef::Config[:solo]
-      clc_ip = node["eucalyptus"]["topology"]["clc-1"]
-      clc  = search(:node, "ipaddress:#{clc_ip}").first
-      node.set["eucalyptus"]["cloud-keys"] = clc["eucalyptus"]["cloud-keys"]
-      node.set["eucalyptus"]["cloud-keys"]["euca.p12"] = clc["eucalyptus"]["cloud-keys"]["euca.p12"]
-      node.save
-      node["eucalyptus"]["cloud-keys"].each do |key_name,data|
-        if data.is_a? String
-          file_name = "#{node["eucalyptus"]["home-directory"]}/var/lib/eucalyptus/keys/#{key_name}"
-          File.open(file_name, 'w') do |file|
-            file.puts Base64.decode64(data)
-          end
-          require 'fileutils'
-          FileUtils.chmod 0700, file_name
-          FileUtils.chown 'eucalyptus', 'eucalyptus', file_name
+    clc_ip = node["eucalyptus"]["topology"]["clc-1"]
+    clc  = search(:node, "ipaddress:#{clc_ip}").first
+    node.set["eucalyptus"]["cloud-keys"] = clc["eucalyptus"]["cloud-keys"]
+    node.set["eucalyptus"]["cloud-keys"]["euca.p12"] = clc["eucalyptus"]["cloud-keys"]["euca.p12"]
+    node.save
+    node["eucalyptus"]["cloud-keys"].each do |key_name,data|
+      if data.is_a? String
+        file_name = "#{node["eucalyptus"]["home-directory"]}/var/lib/eucalyptus/keys/#{key_name}"
+        File.open(file_name, 'w') do |file|
+          file.puts Base64.decode64(data)
         end
-     end
+        require 'fileutils'
+        FileUtils.chmod 0700, file_name
+        FileUtils.chown 'eucalyptus', 'eucalyptus', file_name
+      end
     end
   end
+  not_if { Chef::Config[:solo] }
 end
 
 service "eucalyptus-cloud" do
