@@ -5,7 +5,8 @@
 OPTIND=1  # Reset in case getopts has been used previously in the shell.
 
 # Initialize our own variables:
-cookbooks_url="http://euca-chef.s3.amazonaws.com/eucalyptus-cookbooks-4.1.1.tgz"
+cookbooks_url="https://s3.amazonaws.com/jeevanullas-files/eucalyptus-cookbooks-4.1.1.tgz"
+ciab_env=0
 nc_install_only=0
 
 function usage
@@ -558,10 +559,20 @@ done
 echo "SUBNET="$ciab_subnet
 echo ""
 
+# We are going to ask if the user wants to setup an Eucalyptus 
+# cloud using VPC mode or EC2-Classic mode
+ciab_network_mode=1
+echo "What's the network mode you would like to setup (0 for VPC and 1 for EC2-Classic, default EC2-Classic)? ($ciab_network_mode_guess)"
+read ciab_network_mode
+[[ -z "$ciab_network_mode" ]] && ciab_network_mode=$ciab_network_mode_guess
+echo "NETWORK MODE="$ciab_network_mode
+echo ""
+
 # We only ask certain questions for CIAB installs. Thus, if
 # we're only installing the NC, we'll skip the following questions.
 
-if [ "$nc_install_only" == "0" ]; then
+if [ "$nc_install_only" == "0" ] && [ "$ciab_network_mode" == "1" ]; then
+    echo "We will setup EC2-Classic configuration."
     echo "You must now specify a range of IP addresses that are free"
     echo "for Eucalyptus to use.  These IP addresses should not be"
     echo "taken up by any other machines, and should not be in any"
@@ -616,7 +627,68 @@ if [ "$nc_install_only" == "0" ]; then
         fi
 
     done
+fi
 
+if [ "$nc_install_only" == "0" ] && [ "$ciab_network_mode" == "0" ]; then
+    echo "We will setup VPC configuration."
+
+    if [ "$(ifconfig uplinkbridge 2>/dev/null)" ]; then
+       echo "You already have the virtual network configured for VPC. We will not create it."
+    else
+       /sbin/ip link add type veth
+       /sbin/ip link set dev veth0 up
+       /sbin/ip link set dev veth1 up
+       /usr/sbin/brctl addbr uplinkbridge
+       /usr/sbin/brctl addif uplinkbridge veth0
+       /sbin/ip addr add 172.19.0.1/30 dev uplinkbridge
+       /sbin/ip link set dev uplinkbridge up
+       /sbin/sysctl -w net.ipv4.ip_forward=1
+    fi 
+
+    ipsinrange=0
+
+    until (( $ipsinrange==1 )); do
+
+        ciab_ips1='';
+        ciab_ips2='';
+
+        echo "What's the first address of your available IP range?"
+        until valid_ip $ciab_ips1; do
+            read ciab_ips1
+            valid_ip $ciab_ips1 || echo "Please provide a valid IP."
+        done
+
+        echo "What's the last address of your available IP range?"
+        until valid_ip $ciab_ips2; do
+            read ciab_ips2
+            valid_ip $ciab_ips2 || echo "Please provide a valid IP."
+        done
+
+        ipsub1=$(echo $ciab_ips1 | cut -d'.' -f1-3)
+        ipsub2=$(echo $ciab_ips2 | cut -d'.' -f1-3)
+
+        if [ $ipsub1 == $ipsub2 ]; then
+            # OK, subnets match
+            iptail1=$(echo $ciab_ips1 | cut -d'.' -f4)
+            iptail2=$(echo $ciab_ips2 | cut -d'.' -f4)
+            if ! (("$iptail1+9" < "$iptail2")); then
+                echo "Please provide a range of at least 10 IP addresses, with the second IP greater than the first."
+            else
+                publicend=$(($iptail1+(($iptail2-$iptail1)/2)))
+                ciab_publicips1="$ipsub1.$iptail1"
+                ciab_publicips2="$ipsub1.$iptail2"
+                echo "OK, IP range is good"
+                echo "  Public range will be:   $ciab_publicips1 - $ciab_publicips2"
+                ipsinrange=1
+            fi
+        else
+            echo "Subnets for IP range don't match, try again."
+        fi
+
+    done
+fi
+
+if [ "$nc_install_only" == "0" ]; then
     echo ""
     echo "Do you wish to install the optional load balancer and image"
     echo "management services? This add 10-15 minutes to the installation." 
@@ -678,29 +750,54 @@ rm -rf cookbooks
 curl $cookbooks_url > cookbooks.tgz
 tar zxfv cookbooks.tgz
 
-# Copy the templates to the local directory
-cp -f cookbooks/eucalyptus/faststart/ciab-template.json ciab.json
-cp -f cookbooks/eucalyptus/faststart/node-template.json node.json
+if [ "$ciab_network_mode" == "0" ]; then
+  # Copy the templates to the local directory - VPC
+  cp -f cookbooks/eucalyptus/faststart/ciab-vpc-template.json ciab-vpc.json
+  cp -f cookbooks/eucalyptus/faststart/node-vpc-template.json node-vpc.json
+else 
+  # Copy the templates to the local directory
+  cp -f cookbooks/eucalyptus/faststart/ciab-template.json ciab.json
+  cp -f cookbooks/eucalyptus/faststart/node-template.json node.json
+fi
 
 # Decide which template we're using.
-if [ "$nc_install_only" == "0" ]; then
+if [ "$nc_install_only" == "0" ] && [ "$ciab_network_mode" == "0" ]; then
+    chef_template="ciab-vpc.json"
+elif [ "$nc_install_only" == "1" ] && [ "$ciab_network_mode" == "0" ]; then
+    chef_template="node-vpc.json"
+elif [ "$nc_install_only" == "0" ] && [ "$ciab_network_mode" == "1" ]; then
     chef_template="ciab.json"
-else
+elif [ "$nc_install_only" == "1" ] && [ "$ciab_network_mode" == "1" ]; then
     chef_template="node.json"
 fi
 
-# Perform variable interpolation in the proper template.
-sed -i "s/IPADDR/$ciab_ipaddr/g" $chef_template
-sed -i "s/NETMASK/$ciab_netmask/g" $chef_template
-sed -i "s/GATEWAY/$ciab_gateway/g" $chef_template
-sed -i "s/SUBNET/$ciab_subnet/g" $chef_template
-sed -i "s/PUBLICIPS1/$ciab_publicips1/g" $chef_template
-sed -i "s/PUBLICIPS2/$ciab_publicips2/g" $chef_template
-sed -i "s/PRIVATEIPS1/$ciab_privateips1/g" $chef_template
-sed -i "s/PRIVATEIPS2/$ciab_privateips2/g" $chef_template
-sed -i "s/EXTRASERVICES/$ciab_extraservices/g" $chef_template
-sed -i "s/NIC/$ciab_nic/g" $chef_template
-sed -i "s/NTP/$ciab_ntp/g" $chef_template
+
+if [ "$ciab_network_mode" == "1" ]; then
+   # Perform variable interpolation in the proper template.
+   sed -i "s/IPADDR/$ciab_ipaddr/g" $chef_template
+   sed -i "s/NETMASK/$ciab_netmask/g" $chef_template
+   sed -i "s/GATEWAY/$ciab_gateway/g" $chef_template
+   sed -i "s/SUBNET/$ciab_subnet/g" $chef_template
+   sed -i "s/PUBLICIPS1/$ciab_publicips1/g" $chef_template
+   sed -i "s/PUBLICIPS2/$ciab_publicips2/g" $chef_template
+   sed -i "s/PRIVATEIPS1/$ciab_privateips1/g" $chef_template
+   sed -i "s/PRIVATEIPS2/$ciab_privateips2/g" $chef_template
+   sed -i "s/EXTRASERVICES/$ciab_extraservices/g" $chef_template
+   sed -i "s/NIC/$ciab_nic/g" $chef_template
+   sed -i "s/NTP/$ciab_ntp/g" $chef_template
+elif [ "$ciab_network_mode" == "0" ]; then
+    # VPC interpolation
+   sed -i "s/IPADDR/$ciab_ipaddr/g" $chef_template
+   sed -i "s/NETMASK/$ciab_netmask/g" $chef_template
+   sed -i "s/GATEWAY/$ciab_gateway/g" $chef_template
+   sed -i "s/PUBLICIPS1/$ciab_publicips1/g" $chef_template
+   sed -i "s/PUBLICIPS2/$ciab_publicips2/g" $chef_template
+   sed -i "s/EXTRASERVICES/$ciab_extraservices/g" $chef_template
+   sed -i "s/NIC/$ciab_nic/g" $chef_template
+   sed -i "s/NTP/$ciab_ntp/g" $chef_template
+   ciab_hostname=`hostname`
+   sed -i "s/HOSTNAME/$ciab_hostname/g" $chef_template
+fi
 
 ###############################################################################
 # SECTION 4: INSTALL EUCALYPTUS
@@ -788,18 +885,18 @@ fi
 # paths: one for the NC mode, another for the CIAB mode.
 ###############################################################################
 
-if [ "$nc_install_only" == "0" ]; then
+if [ "$nc_install_only" == "0" ] && [ "$ciab_network_mode" == "1" ]; then
 
 #
 # FINISH CLOUD-IN-A-BOX INSTALL
 #
     # Add tipoftheday to the console
     sed -i 's|<div class="clearfix">|<iframe width="0" height="0" src="https://www.eucalyptus.com/docs/tipoftheday.html?id=FSUUID" seamless="seamless" frameborder="0"></iframe>\n    <div class="clearfix">|' /usr/lib/python2.6/site-packages/eucaconsole/templates/login.pt
-sed -i "s|FSUUID|$uuid|" /usr/lib/python2.6/site-packages/eucaconsole/templates/login.pt
+    sed -i "s|FSUUID|$uuid|" /usr/lib/python2.6/site-packages/eucaconsole/templates/login.pt
 
     # Add link to open IRC window for help
     sed -i "s|© 2014 Eucalyptus Systems, Inc.|© 2014 Eucalyptus Systems, Inc. \&nbsp; \&nbsp; \&nbsp; \&nbsp; Need help\? <a href=\"javascript:poptastic('https://kiwiirc.com/client/irc.freenode.com/eucalyptus');\">Talk to us</a> on IRC.|" /usr/lib/python2.6/site-packages/eucaconsole/templates/master_layout.pt
-sed -i "s|<metal:block metal:define-slot=\"head_js\" />|<script> var newwindow; function poptastic(url) { newwindow=window.open(url,'name','height=400,width=750'); if (window.focus) {newwindow.focus()} } </script>\n    <metal:block metal:define-slot=\"head_js\" />|" /usr/lib/python2.6/site-packages/eucaconsole/templates/master_layout.pt
+    sed -i "s|<metal:block metal:define-slot=\"head_js\" />|<script> var newwindow; function poptastic(url) { newwindow=window.open(url,'name','height=400,width=750'); if (window.focus) {newwindow.focus()} } </script>\n    <metal:block metal:define-slot=\"head_js\" />|" /usr/lib/python2.6/site-packages/eucaconsole/templates/master_layout.pt
 
     echo ""
     echo "[Config] Enabling web console"
@@ -811,7 +908,7 @@ sed -i "s|<metal:block metal:define-slot=\"head_js\" />|<script> var newwindow; 
     
     echo ""
     echo ""
-    echo "[SUCCESS] Eucalyptus installation complete!"
+    echo "[SUCCESS] Eucalyptus EC2-Classic installation complete!"
     total_time=$(timer $t)
     printf 'Time to install: %s\n' $total_time
     curl --silent "https://www.eucalyptus.com/docs/faststart_errors.html?msg=EUCA_INSTALL_SUCCESS&id=$uuid" >> /tmp/fsout.log
@@ -859,7 +956,80 @@ EOF
     echo ""
     echo "Thanks for installing Eucalyptus!"
 
-else
+elif [ "$nc_install_only" == "0" ] && [ "$ciab_network_mode" == "0" ]; then
+
+#
+# FINISH CLOUD-IN-A-BOX INSTALL
+#
+    # Add tipoftheday to the console
+    sed -i 's|<div class="clearfix">|<iframe width="0" height="0" src="https://www.eucalyptus.com/docs/tipoftheday.html?id=FSUUID" seamless="seamless" frameborder="0"></iframe>\n    <div class="clearfix">|' /usr/lib/python2.6/site-packages/eucaconsole/templates/login.pt
+    sed -i "s|FSUUID|$uuid|" /usr/lib/python2.6/site-packages/eucaconsole/templates/login.pt
+
+    # Add link to open IRC window for help
+    sed -i "s|© 2014 Eucalyptus Systems, Inc.|© 2014 Eucalyptus Systems, Inc. \&nbsp; \&nbsp; \&nbsp; \&nbsp; Need help\? <a href=\"javascript:poptastic('https://kiwiirc.com/client/irc.freenode.com/eucalyptus');\">Talk to us</a> on IRC.|" /usr/lib/python2.6/site-packages/eucaconsole/templates/master_layout.pt
+    sed -i "s|<metal:block metal:define-slot=\"head_js\" />|<script> var newwindow; function poptastic(url) { newwindow=window.open(url,'name','height=400,width=750'); if (window.focus) {newwindow.focus()} } </script>\n    <metal:block metal:define-slot=\"head_js\" />|" /usr/lib/python2.6/site-packages/eucaconsole/templates/master_layout.pt
+
+    echo ""
+    echo "[Config] Enabling web console"
+    source ~/eucarc && euare-useraddloginprofile --region localadmin@localhost --as-account eucalyptus -u admin -p password
+
+    echo "[Config] Adding ssh and http to default security group"
+    source ~/eucarc && euca-authorize -P tcp -p 22 default
+    source ~/eucarc && euca-authorize -P tcp -p 80 default
+
+    echo ""
+    echo ""
+    echo "[SUCCESS] Eucalyptus VPC installation complete!"
+    total_time=$(timer $t)
+    printf 'Time to install: %s\n' $total_time
+    curl --silent "https://www.eucalyptus.com/docs/faststart_errors.html?msg=EUCA_INSTALL_SUCCESS&id=$uuid" >> /tmp/fsout.log
+
+    # Add links to the /etc/motd file
+    tutorial_path=`pwd`
+    cat << EOF > /etc/motd
+
+ _______                   _
+(_______)                 | |             _
+ _____   _   _  ____ _____| |_   _ ____ _| |_ _   _  ___
+|  ___) | | | |/ ___|____ | | | | |  _ (_   _) | | |/___)
+| |_____| |_| ( (___/ ___ | | |_| | |_| || |_| |_| |___ |
+|_______)____/ \____)_____|\_)__  |  __/  \__)____/(___/
+                            (____/|_|
+
+To log in to the Management Console, go to:
+http://${ciab_ipaddr}:8888/
+
+Default User Credentials (unless changed):
+  * Account: eucalyptus
+  * Username: admin
+  * Password: password
+
+Eucalyptus CLI Tutorials can be found at:
+
+  $tutorial_path/cookbooks/eucalyptus/faststart/tutorials
+
+EOF
+
+    echo "To log in to the Management Console, go to:"
+    echo "http://${ciab_ipaddr}:8888/"
+    echo ""
+    echo "User Credentials:"
+    echo "  * Account: eucalyptus"
+    echo "  * Username: admin"
+    echo "  * Password: password"
+    echo ""
+
+    echo "If you are new to Eucalyptus, we strongly recommend that you run"
+    echo "the Eucalyptus tutorial now:"
+    echo ""
+    echo "  cd $tutorial_path/cookbooks/eucalyptus/faststart/tutorials"
+    echo "  ./master-tutorial.sh"
+    echo ""
+    echo "Thanks for installing Eucalyptus!"
+
+
+else 
+
 #
 # NODE CONTROLLER INSTALL SUCCESSFUL
 #

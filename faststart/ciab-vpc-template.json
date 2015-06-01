@@ -1,0 +1,78 @@
+{
+    "eucalyptus": {
+      "yum-options": "--nogpg",
+      "eucalyptus-repo": "http://downloads-cdn0.eucalyptus.com/software/eucalyptus/4.1/centos/6/x86_64/",
+      "euca2ools-repo": "http://downloads-cdn0.eucalyptus.com/software/euca2ools/3.2/centos/6/x86_64/",
+      "install-service-image": EXTRASERVICES,
+      "ntp-server": "NTP",
+      "system-properties": {
+          "authentication.access_keys_limit": 10,
+          "authentication.credential_download_generate_certificate": "Limited",
+          "authentication.signing_certificates_limit": 10
+      },
+      "topology": {
+        "clc-1": "IPADDR",
+        "walrus": "IPADDR",
+        "user-facing": ["IPADDR"],
+        "clusters": {
+          "default": {
+            "cc-1": "IPADDR",
+            "sc-1": "IPADDR",
+            "nodes": "IPADDR"
+          }
+        }
+      },
+      "network": {
+        "mode": "VPCMIDO",
+        "public-interface": "br0",
+        "private-interface": "br0",
+        "bridged-nic":"NIC",
+        "bridge-ip": "IPADDR",
+        "bridge-netmask": "NETMASK",
+        "bridge-gateway": "GATEWAY",
+        "config-json": {
+          "InstanceDnsServers": ["IPADDR"],
+          "Mode": "VPCMIDO",
+          "PublicIps": ["PUBLICIPS1-PUBLICIPS2"],
+          "Mido": {
+             "EucanetdHost": "HOSTNAME",
+             "GatewayHost": "HOSTNAME",
+             "GatewayIP": "172.19.0.2",
+             "GatewayInterface": "veth1",
+             "PublicNetworkCidr": "172.19.0.0/30",
+            "PublicGatewayIP": "172.19.0.1"
+          }
+        }
+      }
+    },
+  "midokura" : {
+      "repo-url": "http://repo.midonet.org/midonet/v2015.01/RHEL/6/stable/",
+      "cassandras": [
+        "IPADDR"
+      ],
+      "initial-tenant": "euca_tenant_1",
+      "midolman-host-mapping": {
+        "HOSTNAME": "IPADDR"
+      },
+      "midonet-api-url": "http://IPADDR:8080/midonet-api",
+      "repo-password": "8yU8Pj6h",
+      "repo-username": "eucalyptus",
+      "yum-options": "--nogpg",
+      "zookeepers": [
+        "IPADDR:2181"
+      ]
+  },
+  "run_list": [
+    "recipe[midokura::default]",
+    "recipe[midokura::create-first-resources]",
+    "recipe[eucalyptus::cloud-controller]",
+    "recipe[eucalyptus::user-console]",
+    "recipe[eucalyptus::register-components]",
+    "recipe[eucalyptus::walrus]",
+    "recipe[eucalyptus::cluster-controller]",
+    "recipe[eucalyptus::storage-controller]",
+    "recipe[eucalyptus::node-controller]",
+    "recipe[eucalyptus::configure]",
+    "recipe[eucalyptus::create-first-resources]"
+  ]
+}
