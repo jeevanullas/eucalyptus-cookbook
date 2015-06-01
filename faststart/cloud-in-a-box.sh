@@ -6,7 +6,6 @@ OPTIND=1  # Reset in case getopts has been used previously in the shell.
 
 # Initialize our own variables:
 cookbooks_url="https://s3.amazonaws.com/jeevanullas-files/eucalyptus-cookbooks-4.1.1.tgz"
-ciab_env=0
 nc_install_only=0
 
 function usage
@@ -561,11 +560,10 @@ echo ""
 
 # We are going to ask if the user wants to setup an Eucalyptus 
 # cloud using VPC mode or EC2-Classic mode
-ciab_network_mode=1
-echo "What's the network mode you would like to setup (0 for VPC and 1 for EC2-Classic, default EC2-Classic)? ($ciab_network_mode_guess)"
+echo "What's the network mode you would like to setup (0 for VPC and 1 for EC2-Classic)? ($ciab_network_mode_guess)"
 read ciab_network_mode
 [[ -z "$ciab_network_mode" ]] && ciab_network_mode=$ciab_network_mode_guess
-echo "NETWORK MODE="$ciab_network_mode
+echo "NM_MODE="$ciab_network_mode
 echo ""
 
 # We only ask certain questions for CIAB installs. Thus, if
@@ -632,8 +630,8 @@ fi
 if [ "$nc_install_only" == "0" ] && [ "$ciab_network_mode" == "0" ]; then
     echo "We will setup VPC configuration."
 
-    if [ "$(ifconfig uplinkbridge 2>/dev/null)" ]; then
-       echo "You already have the virtual network configured for VPC. We will not create it."
+    if [ "$(ifconfig uplinkbridge)" ]; then
+       echo "You already have the virtual network configured for VPC"
     else
        /sbin/ip link add type veth
        /sbin/ip link set dev veth0 up
