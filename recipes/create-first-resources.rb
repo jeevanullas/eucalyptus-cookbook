@@ -51,6 +51,12 @@ execute "Wait for resource availability" do
   retry_delay 10
 end
 
+if node["eucalyptus"]["network"]["mode"] == "VPCMIDO"
+  execute "Creating default VPC" do
+     command "source #{node['eucalyptus']['admin-cred-dir']}/eucarc && euca-create-vpc `euare-accountlist | grep ^eucalyptus | awk '{print $2}'`"
+  end
+end
+
 execute "Running an instance" do
   command "source #{node['eucalyptus']['admin-cred-dir']}/eucarc && euca-run-instances -k my-first-keypair $(euca-describe-images | grep default | grep emi | cut -f 2)"
 end
