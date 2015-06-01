@@ -55,8 +55,8 @@
         "HOSTNAME": "IPADDR"
       },
       "midonet-api-url": "http://IPADDR:8080/midonet-api",
-      "repo-password": "8yU8Pj6h",
-      "repo-username": "eucalyptus",
+      "repo-password": "",
+      "repo-username": "",
       "yum-options": "--nogpg",
       "zookeepers": [
         "IPADDR:2181"
