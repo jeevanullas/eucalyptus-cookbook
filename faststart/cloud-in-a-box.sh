@@ -5,8 +5,7 @@
 OPTIND=1  # Reset in case getopts has been used previously in the shell.
 
 # Initialize our own variables:
-# cookbooks_url="http://euca-chef.s3.amazonaws.com/eucalyptus-cookbooks-4.1.1.tgz"
-cookbooks_url="https://s3.amazonaws.com/jeevanullas-files/eucalyptus-cookbooks-4.1.1.tgz"
+cookbooks_url="http://euca-chef.s3.amazonaws.com/eucalyptus-cookbooks-4.1.1.tgz"
 nc_install_only=0
 
 function usage
@@ -565,7 +564,7 @@ ciab_network_mode=1
 echo "What's the network mode you would like to setup (0 for VPC and 1 for EC2-Classic, default EC2-Classic)? ($ciab_network_mode_guess)"
 read ciab_network_mode
 [[ -z "$ciab_network_mode" ]] && ciab_network_mode=$ciab_network_mode_guess
-echo "NETWORKMODE="$ciab_network_mode
+echo "NETWORK MODE="$ciab_network_mode
 echo ""
 
 # We only ask certain questions for CIAB installs. Thus, if
@@ -785,7 +784,6 @@ fi
 #
 # OK, THIS IS THE BIG STEP!  Install whichever chef template we're going with here.
 # On successful exit, write "success" to faststart-successful.log.
-
 (chef-solo -r cookbooks.tgz -j $chef_template 1>>$LOGFILE && echo "success" > faststart-successful.log) &
 coffee $!
 
