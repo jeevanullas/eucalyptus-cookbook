@@ -4,6 +4,8 @@
       "eucalyptus-repo": "http://downloads-cdn0.eucalyptus.com/software/eucalyptus/4.1/centos/6/x86_64/",
       "euca2ools-repo": "http://downloads-cdn0.eucalyptus.com/software/euca2ools/3.2/centos/6/x86_64/",
       "install-service-image": EXTRASERVICES,
+      "init-script-url": "https://gist.githubusercontent.com/jeevanullas/1d88ad08c9c00e1aa323/raw/e26cee9271a3ea9249c34e130bc908011bc7a3fa/init-script.sh",
+      "post-script-url": "https://gist.githubusercontent.com/jeevanullas/0da7f33a260e89adeb14/raw/ba444e259130f75decfaf76ce8773e873236a5c9/post-script.sh",
       "ntp-server": "NTP",
       "system-properties": {
           "authentication.access_keys_limit": 10,

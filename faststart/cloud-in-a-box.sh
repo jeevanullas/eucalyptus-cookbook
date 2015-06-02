@@ -631,19 +631,6 @@ fi
 if [ "$nc_install_only" == "0" ] && [ "$ciab_network_mode" == "0" ]; then
     echo "We will setup VPC configuration."
 
-    if [ "$(ifconfig uplinkbridge 2>/dev/null)" ]; then
-       echo "You already have the virtual network configured for VPC. We will not create it."
-    else
-       /sbin/ip link add type veth
-       /sbin/ip link set dev veth0 up
-       /sbin/ip link set dev veth1 up
-       /usr/sbin/brctl addbr uplinkbridge
-       /usr/sbin/brctl addif uplinkbridge veth0
-       /sbin/ip addr add 172.19.0.1/30 dev uplinkbridge
-       /sbin/ip link set dev uplinkbridge up
-       /sbin/sysctl -w net.ipv4.ip_forward=1
-    fi 
-
     ipsinrange=0
 
     until (( $ipsinrange==1 )); do
@@ -884,7 +871,7 @@ fi
 # paths: one for the NC mode, another for the CIAB mode.
 ###############################################################################
 
-if [ "$nc_install_only" == "0" ] && [ "$ciab_network_mode" == "1" ]; then
+if [ "$nc_install_only" == "0" ]; then
 
 #
 # FINISH CLOUD-IN-A-BOX INSTALL
@@ -954,78 +941,6 @@ EOF
     echo "  ./master-tutorial.sh"
     echo ""
     echo "Thanks for installing Eucalyptus!"
-
-elif [ "$nc_install_only" == "0" ] && [ "$ciab_network_mode" == "0" ]; then
-
-#
-# FINISH CLOUD-IN-A-BOX INSTALL
-#
-    # Add tipoftheday to the console
-    sed -i 's|<div class="clearfix">|<iframe width="0" height="0" src="https://www.eucalyptus.com/docs/tipoftheday.html?id=FSUUID" seamless="seamless" frameborder="0"></iframe>\n    <div class="clearfix">|' /usr/lib/python2.6/site-packages/eucaconsole/templates/login.pt
-    sed -i "s|FSUUID|$uuid|" /usr/lib/python2.6/site-packages/eucaconsole/templates/login.pt
-
-    # Add link to open IRC window for help
-    sed -i "s|© 2014 Eucalyptus Systems, Inc.|© 2014 Eucalyptus Systems, Inc. \&nbsp; \&nbsp; \&nbsp; \&nbsp; Need help\? <a href=\"javascript:poptastic('https://kiwiirc.com/client/irc.freenode.com/eucalyptus');\">Talk to us</a> on IRC.|" /usr/lib/python2.6/site-packages/eucaconsole/templates/master_layout.pt
-    sed -i "s|<metal:block metal:define-slot=\"head_js\" />|<script> var newwindow; function poptastic(url) { newwindow=window.open(url,'name','height=400,width=750'); if (window.focus) {newwindow.focus()} } </script>\n    <metal:block metal:define-slot=\"head_js\" />|" /usr/lib/python2.6/site-packages/eucaconsole/templates/master_layout.pt
-
-    echo ""
-    echo "[Config] Enabling web console"
-    source ~/eucarc && euare-useraddloginprofile --region localadmin@localhost --as-account eucalyptus -u admin -p password
-
-    echo "[Config] Adding ssh and http to default security group"
-    source ~/eucarc && euca-authorize -P tcp -p 22 default
-    source ~/eucarc && euca-authorize -P tcp -p 80 default
-
-    echo ""
-    echo ""
-    echo "[SUCCESS] Eucalyptus VPC installation complete!"
-    total_time=$(timer $t)
-    printf 'Time to install: %s\n' $total_time
-    curl --silent "https://www.eucalyptus.com/docs/faststart_errors.html?msg=EUCA_INSTALL_SUCCESS&id=$uuid" >> /tmp/fsout.log
-
-    # Add links to the /etc/motd file
-    tutorial_path=`pwd`
-    cat << EOF > /etc/motd
-
- _______                   _
-(_______)                 | |             _
- _____   _   _  ____ _____| |_   _ ____ _| |_ _   _  ___
-|  ___) | | | |/ ___|____ | | | | |  _ (_   _) | | |/___)
-| |_____| |_| ( (___/ ___ | | |_| | |_| || |_| |_| |___ |
-|_______)____/ \____)_____|\_)__  |  __/  \__)____/(___/
-                            (____/|_|
-
-To log in to the Management Console, go to:
-http://${ciab_ipaddr}:8888/
-
-Default User Credentials (unless changed):
-  * Account: eucalyptus
-  * Username: admin
-  * Password: password
-
-Eucalyptus CLI Tutorials can be found at:
-
-  $tutorial_path/cookbooks/eucalyptus/faststart/tutorials
-
-EOF
-
-    echo "To log in to the Management Console, go to:"
-    echo "http://${ciab_ipaddr}:8888/"
-    echo ""
-    echo "User Credentials:"
-    echo "  * Account: eucalyptus"
-    echo "  * Username: admin"
-    echo "  * Password: password"
-    echo ""
-
-    echo "If you are new to Eucalyptus, we strongly recommend that you run"
-    echo "the Eucalyptus tutorial now:"
-    echo ""
-    echo "  cd $tutorial_path/cookbooks/eucalyptus/faststart/tutorials"
-    echo "  ./master-tutorial.sh"
-    echo ""
-    echo "Thanks for installing Eucalyptus!"
-
 
 else 
 
