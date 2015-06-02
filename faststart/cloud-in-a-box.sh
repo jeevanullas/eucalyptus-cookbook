@@ -5,6 +5,7 @@
 OPTIND=1  # Reset in case getopts has been used previously in the shell.
 
 # Initialize our own variables:
+# cookbooks_url="http://euca-chef.s3.amazonaws.com/eucalyptus-cookbooks-4.1.1.tgz"
 cookbooks_url="https://s3.amazonaws.com/jeevanullas-files/eucalyptus-cookbooks-4.1.1.tgz"
 nc_install_only=0
 
@@ -564,21 +565,21 @@ ciab_network_mode=1
 echo "What's the network mode you would like to setup (0 for VPC and 1 for EC2-Classic, default EC2-Classic)? ($ciab_network_mode_guess)"
 read ciab_network_mode
 [[ -z "$ciab_network_mode" ]] && ciab_network_mode=$ciab_network_mode_guess
-echo "NETWORK MODE="$ciab_network_mode
+echo "NETWORKMODE="$ciab_network_mode
 echo ""
 
 # We only ask certain questions for CIAB installs. Thus, if
 # we're only installing the NC, we'll skip the following questions.
 
-if [ "$nc_install_only" == "0" ] && [ "$ciab_network_mode" == "1" ]; then
-    echo "We will setup EC2-Classic configuration."
+if [ "$nc_install_only" == "0" ]; then
     echo "You must now specify a range of IP addresses that are free"
     echo "for Eucalyptus to use.  These IP addresses should not be"
     echo "taken up by any other machines, and should not be in any"
     echo "DHCP address pools.  Faststart will split this range into"
     echo "public and private IP addresses, which will then be used"
     echo "by Eucalyptus instances.  Please specify a range of at least"
-    echo "10 IP addresses."
+    echo "10 IP addresses. For VPC installation we will use the entire"
+    echo "range you have provided as public IPs."
     echo ""
 
     ipsinrange=0
@@ -616,6 +617,10 @@ if [ "$nc_install_only" == "0" ] && [ "$ciab_network_mode" == "1" ]; then
                 ciab_publicips2="$ipsub1.$publicend"
                 ciab_privateips1="$ipsub1.$privatestart"
                 ciab_privateips2="$ipsub1.$iptail2"
+                # If we want a VPC install we will use the entire IP range for public IPs
+                if [ "$ciab_network_mode" == "0" ]; then
+                   ciab_publicips2="$ipsub1.$iptail2"
+                fi
                 echo "OK, IP range is good"
                 echo "  Public range will be:   $ciab_publicips1 - $ciab_publicips2"
                 echo "  Private range will be   $ciab_privateips1 - $ciab_privateips2"
@@ -624,53 +629,6 @@ if [ "$nc_install_only" == "0" ] && [ "$ciab_network_mode" == "1" ]; then
         else
             echo "Subnets for IP range don't match, try again."
         fi
-
-    done
-fi
-
-if [ "$nc_install_only" == "0" ] && [ "$ciab_network_mode" == "0" ]; then
-    echo "We will setup VPC configuration."
-
-    ipsinrange=0
-
-    until (( $ipsinrange==1 )); do
-
-        ciab_ips1='';
-        ciab_ips2='';
-
-        echo "What's the first address of your available IP range?"
-        until valid_ip $ciab_ips1; do
-            read ciab_ips1
-            valid_ip $ciab_ips1 || echo "Please provide a valid IP."
-        done
-
-        echo "What's the last address of your available IP range?"
-        until valid_ip $ciab_ips2; do
-            read ciab_ips2
-            valid_ip $ciab_ips2 || echo "Please provide a valid IP."
-        done
-
-        ipsub1=$(echo $ciab_ips1 | cut -d'.' -f1-3)
-        ipsub2=$(echo $ciab_ips2 | cut -d'.' -f1-3)
-
-        if [ $ipsub1 == $ipsub2 ]; then
-            # OK, subnets match
-            iptail1=$(echo $ciab_ips1 | cut -d'.' -f4)
-            iptail2=$(echo $ciab_ips2 | cut -d'.' -f4)
-            if ! (("$iptail1+9" < "$iptail2")); then
-                echo "Please provide a range of at least 10 IP addresses, with the second IP greater than the first."
-            else
-                publicend=$(($iptail1+(($iptail2-$iptail1)/2)))
-                ciab_publicips1="$ipsub1.$iptail1"
-                ciab_publicips2="$ipsub1.$iptail2"
-                echo "OK, IP range is good"
-                echo "  Public range will be:   $ciab_publicips1 - $ciab_publicips2"
-                ipsinrange=1
-            fi
-        else
-            echo "Subnets for IP range don't match, try again."
-        fi
-
     done
 fi
 
@@ -739,7 +697,6 @@ tar zxfv cookbooks.tgz
 if [ "$ciab_network_mode" == "0" ]; then
   # Copy the templates to the local directory - VPC
   cp -f cookbooks/eucalyptus/faststart/ciab-vpc-template.json ciab-vpc.json
-  cp -f cookbooks/eucalyptus/faststart/node-vpc-template.json node-vpc.json
 else 
   # Copy the templates to the local directory
   cp -f cookbooks/eucalyptus/faststart/ciab-template.json ciab.json
@@ -749,41 +706,26 @@ fi
 # Decide which template we're using.
 if [ "$nc_install_only" == "0" ] && [ "$ciab_network_mode" == "0" ]; then
     chef_template="ciab-vpc.json"
-elif [ "$nc_install_only" == "1" ] && [ "$ciab_network_mode" == "0" ]; then
-    chef_template="node-vpc.json"
 elif [ "$nc_install_only" == "0" ] && [ "$ciab_network_mode" == "1" ]; then
     chef_template="ciab.json"
 elif [ "$nc_install_only" == "1" ] && [ "$ciab_network_mode" == "1" ]; then
     chef_template="node.json"
 fi
 
-
-if [ "$ciab_network_mode" == "1" ]; then
-   # Perform variable interpolation in the proper template.
-   sed -i "s/IPADDR/$ciab_ipaddr/g" $chef_template
-   sed -i "s/NETMASK/$ciab_netmask/g" $chef_template
-   sed -i "s/GATEWAY/$ciab_gateway/g" $chef_template
-   sed -i "s/SUBNET/$ciab_subnet/g" $chef_template
-   sed -i "s/PUBLICIPS1/$ciab_publicips1/g" $chef_template
-   sed -i "s/PUBLICIPS2/$ciab_publicips2/g" $chef_template
-   sed -i "s/PRIVATEIPS1/$ciab_privateips1/g" $chef_template
-   sed -i "s/PRIVATEIPS2/$ciab_privateips2/g" $chef_template
-   sed -i "s/EXTRASERVICES/$ciab_extraservices/g" $chef_template
-   sed -i "s/NIC/$ciab_nic/g" $chef_template
-   sed -i "s/NTP/$ciab_ntp/g" $chef_template
-elif [ "$ciab_network_mode" == "0" ]; then
-    # VPC interpolation
-   sed -i "s/IPADDR/$ciab_ipaddr/g" $chef_template
-   sed -i "s/NETMASK/$ciab_netmask/g" $chef_template
-   sed -i "s/GATEWAY/$ciab_gateway/g" $chef_template
-   sed -i "s/PUBLICIPS1/$ciab_publicips1/g" $chef_template
-   sed -i "s/PUBLICIPS2/$ciab_publicips2/g" $chef_template
-   sed -i "s/EXTRASERVICES/$ciab_extraservices/g" $chef_template
-   sed -i "s/NIC/$ciab_nic/g" $chef_template
-   sed -i "s/NTP/$ciab_ntp/g" $chef_template
-   ciab_hostname=`hostname`
-   sed -i "s/HOSTNAME/$ciab_hostname/g" $chef_template
-fi
+# Perform variable interpolation in the proper template.
+sed -i "s/IPADDR/$ciab_ipaddr/g" $chef_template
+sed -i "s/NETMASK/$ciab_netmask/g" $chef_template
+sed -i "s/GATEWAY/$ciab_gateway/g" $chef_template
+sed -i "s/SUBNET/$ciab_subnet/g" $chef_template
+sed -i "s/PUBLICIPS1/$ciab_publicips1/g" $chef_template
+sed -i "s/PUBLICIPS2/$ciab_publicips2/g" $chef_template
+sed -i "s/PRIVATEIPS1/$ciab_privateips1/g" $chef_template
+sed -i "s/PRIVATEIPS2/$ciab_privateips2/g" $chef_template
+sed -i "s/EXTRASERVICES/$ciab_extraservices/g" $chef_template
+sed -i "s/NIC/$ciab_nic/g" $chef_template
+sed -i "s/NTP/$ciab_ntp/g" $chef_template
+ciab_hostname=`hostname`
+sed -i "s/HOSTNAME/$ciab_hostname/g" $chef_template
 
 ###############################################################################
 # SECTION 4: INSTALL EUCALYPTUS
@@ -894,7 +836,7 @@ if [ "$nc_install_only" == "0" ]; then
     
     echo ""
     echo ""
-    echo "[SUCCESS] Eucalyptus EC2-Classic installation complete!"
+    echo "[SUCCESS] Eucalyptus installation complete!"
     total_time=$(timer $t)
     printf 'Time to install: %s\n' $total_time
     curl --silent "https://www.eucalyptus.com/docs/faststart_errors.html?msg=EUCA_INSTALL_SUCCESS&id=$uuid" >> /tmp/fsout.log
