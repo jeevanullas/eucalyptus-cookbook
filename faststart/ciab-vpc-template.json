@@ -46,7 +46,6 @@
       }
     },
   "midokura" : {
-      "repo-url": "http://repo.midonet.org/midonet/v2015.01/RHEL/6/stable/",
       "cassandras": [
         "IPADDR"
       ],
@@ -55,8 +54,6 @@
         "HOSTNAME": "IPADDR"
       },
       "midonet-api-url": "http://IPADDR:8080/midonet-api",
-      "repo-password": "",
-      "repo-username": "",
       "yum-options": "--nogpg",
       "zookeepers": [
         "IPADDR:2181"
