@@ -560,10 +560,12 @@ echo ""
 
 # We are going to ask if the user wants to setup an Eucalyptus 
 # cloud using VPC mode or EC2-Classic mode
-ciab_network_mode=1
+ciab_network_mode_guess="1"
 echo "What's the network mode you would like to setup (0 for VPC and 1 for EC2-Classic, default EC2-Classic)? ($ciab_network_mode_guess)"
 read ciab_network_mode
-[[ -z "$ciab_network_mode" ]] && ciab_network_mode=$ciab_network_mode_guess
+if [ -z "$ciab_network_mode" ]; then 
+   ciab_network_mode=$ciab_network_mode_guess
+fi
 echo "NETWORK MODE="$ciab_network_mode
 echo ""
 
